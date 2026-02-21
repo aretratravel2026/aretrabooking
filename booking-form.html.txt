@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Aretra Travel - Booking Form</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+  <script src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    body {
+      background-color: #0b0503;
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // WhatsApp numaran (başında 0 yok, ülke kodlu)
+    const WHATSAPP_NUMBER = "905424159201";
+
+    // COLORS
+    const BRAND_BG = "#0b0503";
+    const BRAND_MAIN = "#6b3020";
+
+    // Private tours: pax bazlı / VAT dahil
+    const privateTourPricing = {
+      "Daily Izmir Tour": { 1: 410, 2: 230, 3: 180, 4: 180, "5-10": 130 },
+      "Ephesus Tour": { 1: 505, 2: 305, 3: 255, 4: 225, "5-10": 195 },
+      "Pergamum Tour": { 1: 490, 2: 290, 3: 240, 4: 210, "5-10": 180 },
+      "Pamukkale & Hierapolis Tour": { 1: 620, 2: 350, 3: 280, 4: 260, "5-10": 230 },
+      "Cesme & Alacatı Tour": { 1: 485, 2: 270, 3: 200, 4: 160, "5-10": 140 },
+      "Urla Wine Tour": { 1: 490, 2: 270, 3: 195, 4: 165, "5-10": 150 },
+      "Jewish Heritage Tour": { 1: 485, 2: 270, 3: 200, 4: 160, "5-10": 140 },
+      "Priene Miletus and Didyma Tour": { 1: 610, 2: 340, 3: 270, 4: 250, "5-10": 220 }
+    };
+
+    // Group tours: kişi başı sabit fiyat / VAT dahil
+    const groupTourPricing = {
+      "Efes Group Tour": 165,
+      "Pergamum Group Tour": 150,
+      "Izmir Group Tour": 150
+    };
+
+    // Transfers: araç başı fiyat / + VAT
+    const transferPricing = {
+      "Mercedes Vito (1-6 Pax)": 55,
+      "Mercedes Sprinter (7-14 Pax)": 80
+    };
+
+    const steps = ["Personal Info", "Service & Details", "Summary & Confirm"];
+
+    function App() {
+      const [step, setStep] = useState(0);
+      const [submitted, setSubmitted] = useState(false);
+
+      // "private" | "group" | "transfer"
+      const [tourCategory, setTourCategory] = useState("private");
+      const [pricing, setPricing] = useState({ net: 0, vat: 0, total: 0 });
+
+      const [form, setForm] = useState({
+        firstName: "", lastName: "", phone: "", email: "", nationality: "",
+        privateTour: "", groupTour: "", transferType: "", vehicle: "",
+        date: "", time: "", pax: "1",
+        pickupTime: "", pickupLocation: "", dropoffLocation: "",
+        notes: "", kvkk: false
+      });
+
+      const setField = (key) => (val) => setForm((f) => ({ ...f, [key]: val }));
+
+      const currentServiceName =
+        tourCategory === "private"
+          ? form.privateTour
+          : tourCategory === "group"
+          ? form.groupTour
+          : form.transferType;
+
+      // PRICE CALCULATION
+      useEffect(() => {
+        let net = 0, vat = 0, total = 0;
+        const pax = parseInt(form.pax || "1", 10);
+
+        if (tourCategory === "private" && form.privateTour) {
+          const table = privateTourPricing[form.privateTour];
+          let perPerson = 0;
+          if (pax >= 1 && pax <= 4) perPerson = table[pax];
+          else if (pax >= 5) perPerson = table["5-10"];
+          total = perPerson * pax;
+          net = total; // VAT included
+          vat = 0;
+        } else if (tourCategory === "group" && form.groupTour) {
+          const perPerson = groupTourPricing[form.groupTour] || 0;
+          total = perPerson * pax;
+          net = total; // VAT included
+          vat = 0;
+        } else if (tourCategory === "transfer" && form.vehicle) {
+          net = transferPricing[form.vehicle] || 0;
+          vat = net * 0.20;
+          total = net + vat;
+        }
+
+        setPricing({ net, vat, total });
+      }, [tourCategory, form.privateTour, form.groupTour, form.vehicle, form.pax]);
+
+      const isStep0Valid = form.firstName && form.lastName && form.phone && form.email;
+      const isStep1Valid =
+        tourCategory === "private"
+          ? form.privateTour && form.date && form.pax
+          : tourCategory === "group"
+          ? form.groupTour && form.date && form.pax
+          : form.transferType && form.vehicle && form.date && form.pickupLocation && form.dropoffLocation;
+
+      // WhatsApp yönlendirme
+      const handleWhatsAppSend = () => {
+        const paxText =
+          tourCategory === "transfer" ? "-" : `${form.pax} pax`;
+
+        const lines = [
+          "ARETRA TRAVEL BOOKING REQUEST",
+          "-----------------------------",
+          `Category: ${tourCategory === "private" ? "Private Tour" : tourCategory === "group" ? "Group Tour" : "Transfer"}`,
+          `Service: ${currentServiceName || "-"}`,
+          `Date: ${form.date || "-"}`,
+          tourCategory === "transfer" ? `Time: ${form.pickupTime || "-"}` : "",
+          tourCategory !== "transfer" ? `Pax: ${paxText}` : "",
+          tourCategory === "transfer" ? `Vehicle: ${form.vehicle || "-"}` : "",
+          tourCategory === "transfer" ? `Pickup: ${form.pickupLocation || "-"}` : "",
+          tourCategory === "transfer" ? `Drop-off: ${form.dropoffLocation || "-"}` : "",
+          "",
+          `Guest: ${form.firstName} ${form.lastName}`,
+          `Phone: ${form.phone}`,
+          `Email: ${form.email}`,
+          form.nationality ? `Nationality: ${form.nationality}` : "",
+          "",
+          `Notes: ${form.notes || "-"}`,
+          "",
+          `Total: €${pricing.total.toFixed(2)}`,
+          tourCategory === "transfer"
+            ? "(Transfer price +20% VAT included in total)"
+            : "(Tour price VAT included)"
+        ].filter(Boolean);
+
+        const message = encodeURIComponent(lines.join("\n"));
+        const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${message}`;
+        window.open(url, "_blank");
+        setSubmitted(true);
+      };
+
+      if (submitted) {
+        return (
+          <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: BRAND_BG }}>
+            <div className="bg-black/80 border border-[#3b1c12] rounded-3xl shadow-2xl p-10 max-w-md w-full text-center text-[#f5e9dd]">
+              <div className="text-5xl mb-4">✓</div>
+              <h2 className="text-2xl font-semibold tracking-wide mb-2">Request Sent via WhatsApp</h2>
+              <p className="text-sm text-[#d7c7b4] mb-6">
+                Thank you, <strong>{form.firstName} {form.lastName}</strong>.<br />
+                Your request has been opened in WhatsApp. We will get back to you shortly.
+              </p>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-8 py-2 rounded-full text-sm font-semibold tracking-wide"
+                style={{ backgroundColor: BRAND_MAIN, color: "#f4e5d6" }}
+              >
+                New Booking
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="min-h-screen flex items-center justify-center px-4 py-10" style={{ backgroundColor: BRAND_BG }}>
+          <div className="w-full max-w-3xl bg-[#120806] border border-[#3b1c12] rounded-3xl shadow-2xl overflow-hidden text-[#f5e9dd]">
+            
+            {/* HEADER + LOGO */}
+            <div className="px-8 pt-8 pb-6 text-center border-b border-[#3b1c12] bg-gradient-to-b from-[#1b0c08] to-[#120806]">
+              <img src="3.png" alt="Aretra Travel" className="h-20 mx-auto mb-3 object-contain" />
+              <h1 className="text-2xl tracking-[0.3em] uppercase text-[#c79b6b]">Aretra Travel</h1>
+              <p className="text-xs mt-2 text-[#d7c7b4] tracking-wide">Tailor-Made Tours & Private Transfers</p>
+            </div>
+
+            <div className="px-8 py-7">
+              {/* Step indicator */}
+              <div className="flex justify-between mb-8">
+                {steps.map((s, i) => (
+                  <div key={s} className="flex-1 flex flex-col items-center">
+                    <div
+                      className={
+                        "w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold " +
+                        (i <= step ? "bg-[#c79b6b] text-[#120806]" : "border border-[#3b1c12] text-[#8c6b4b]")
+                      }
+                    >
+                      {i + 1}
+                    </div>
+                    <span className="mt-2 text-[10px] tracking-[0.15em] uppercase text-[#a38460]">
+                      {s}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* STEP 0: PERSONAL INFO */}
+              {step === 0 && (
+                <div className="space-y-4">
+                  <h2 className="text-sm tracking-[0.2em] uppercase text-[#c79b6b] mb-2">Guest Details</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <input
+                      placeholder="First Name *"
+                      className="bg-[#1a0d09] border border-[#3b1c12] rounded-xl px-3 py-2 text-sm w-full focus:outline-none focus:border-[#c79b6b]"
+                      value={form.firstName}
+                      onChange={e => setField("firstName")(e.target.value)}
+                    />
+                    <input
+                      placeholder="Last Name *"
+                      className="bg-[#1a0d09] border border-[#3b1c12] rounded-xl px-3 py-2 text-sm w-full focus:outline-none focus:border-[#c79b6b]"
+                      value={form.lastName}
+                      onChange={e => setField("lastName")(e.target.value)}
+                    />
+                  </div>
+                  <input
+                    placeholder="Phone (with country code) *"
+                    className="bg-[#1a0d09] border border-[#3b1c12] rounded-xl px-3 py-2 text-sm w-full focus:outline-none focus:border-[#c79b6b]"
+                    value={form.phone}
+                    onChange={e => setField("phone")(e.target.value)}
+                  />
+                  <input
+                    placeholder="Email Address *"
+                    className="bg-[#1a0d09] border border-[#3b1c12] rounded-xl px-3 py-2 text-sm w-full focus:outline-none focus:border-[#c79b6b]"
+                    value={form.email}
+                    onChange={e => setField("email")(e.target.value)}
+                  />
+                  <input
+                    placeholder="Nationality"
+                    className="bg-[#1a0d09] border border-[#3b1c12] rounded-xl px-3 py-2 text-sm w-full focus:outline-none focus:border-[#c79b6b]"
+                    value={form.nationality}
+                    onChange={e => setField("nationality")(e.target.value)}
+                  />
+                </div>
+              )}
+
+              {/* STEP 1: SERVICE & DETAILS */}
+              {step === 1 && (
+                <div className="space-y-6">
+                  <h2 className="text-sm tracking-[0.2em] uppercase text-[#c79b6b]">Service Selection</h2>
+
+                  {/* CATEGORY TABS */}
+                  <div className="flex bg-[#1a0d09] border border-[#3b1c12] rounded-2xl p-1 text-[11px] font-semibold tracking-[0.16em] uppercase">
+                    <button
+                      onClick={() => setTourCategory("private")}
+                      className={
+                        "flex-1 py-2 rounded-xl " +
+                        (tourCategory === "private"
+                          ? "bg-[#c79b6b] text-[#120806]"
+                          : "text-[#c79b6b]")
+                      }
+                    >
+                      Private Tours
+                    </button>
+                    <button
+                      onClick={() => setTourCategory("group")}
+                      className={
+                        "flex-1 py-2 rounded-xl " +
+                        (tourCategory === "group"
+                          ? "bg-[#c79b6b] text-[#120806]"
+                          : "text-[#c79b6b]")
+                      }
+                    >
+                      Group Tours
+                    </button>
+                    <button
+                      onClick={() => setTourCategory("transfer")}
+                      className={
+                        "flex-1 py-2 rounded-xl " +
+                        (tourCategory === "transfer"
+                          ? "bg-[#c79b6b] text-[#120806]"
+                          : "text-[#c79b6b]")
+                      }
+                    >
+                      Transfers
+                    </button>
+                  </div>
+
+                  {/* PRIVATE TOURS */}
+                  {tourCategory === "private" && (
+                    <div className="space-y-4">
+                      <select
+                        className="bg-[#1a0d09] border border-[#3b1c12] rounded-xl px-3 py-2 text-sm w-full focus:outline-none focus:border-[#c79b6b]"
+                        value={form.privateTour}
+                        onChange={e => setField("privateTour")(e.target.value)}
+                      >
+                        <option value="">Select Private Tour *</option>
+                        {Object.keys(privateTourPricing).map(t => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                      <div className="grid grid-cols-2 gap-4">
+                        <input
+                          type="date"
+                          className="bg-[#1a0d09] border border-[#3b1c12] rounded-xl px-3 py-2 text-sm w-full focus:outline-none focus:border-[#c79b6b]"
+                          value={form.date}
+                          onChange={e => setField("date")(e.target.value)}
+                        />
+                        <input
+                          type="number"
+                          min="1"
+                          max="10"
+                          placeholder="Pax (1–10) *"
+                          className="bg-[#1a0d09] border border-[#3b1c12] rounded-xl px-3 py-2 text-sm w-full focus:outline-none focus:border-[#c79b6b]"
+                          value={form.pax}
+                          onChange={e => setField("pax")(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* GROUP TOURS */}
+                  {tourCategory === "group" && (
+                    <div className="space-y-4">
+                      <select
+                        className="bg-[#1a0d09] border border-[#3b1c12] rounded-xl px-3 py-2 text-sm w-full focus:outline-none focus:border-[#c79b6b]"
+                        value={form.groupTour}
+                        onChange={e => setField("groupTour")(e.target.value)}
+                      >
+                        <option value="">Select Group Tour *</option>
+                        {Object.keys(groupTourPricing).map(t => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                      <div className="grid grid-cols-2 gap-4">
+                        <input
+                          type="date"
+                          className="bg-[#1a0d09] border border-[#3b1c12] rounded-xl px-3 py-2 text-sm w-full focus:outline-none focus:border-[#c79b6b]"
+                          value={form.date}
+                          onChange={e => setField("date")(e.target.value)}
+                        />
+                        <input
+                          type="number"
+                          min="1"
+                          placeholder="Number of Guests *"
+                          className="bg-[#1a0d09] border border-[#3b1c12] rounded-xl px-3 py-2 text-sm w-full focus:outline-none focus:border-[#c79b6b]"
+                          value={form.pax}
+                          onChange={e => setField("pax")(e.target.value)}
+                        />
+                      </div>
+                      <p className="text-[11px] text-[#d7c7b4]">
+                        Group tours: price per person, VAT included.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* TRANSFERS */}
+                  {tourCategory === "transfer" && (
+                    <div className="space-y-4">
+                      <select
+                        className="bg-[#1a0d09] border border-[#3b1c12] rounded-xl px-3 py-2 text-sm w-full focus:outline-none focus:border-[#c79b6b]"
+                        value={form.transferType}
+                        onChange={e => setField("transferType")(e.target.value)}
+                      >
+                        <option value="">Select Transfer Route *</option>
+                        <option>Izmir Airport to Hotel</option>
+                        <option>Hotel to Izmir Airport</option>
+                        <option>Other Regions Transfer</option>
+                      </select>
+                      <select
+                        className="bg-[#1a0d09] border border-[#3b1c12] rounded-xl px-3 py-2 text-sm w-full focus:outline-none focus:border-[#c79b6b]"
+                        value={form.vehicle}
+                        onChange={e => setField("vehicle")(e.target.value)}
+                      >
+                        <option value="">Select Vehicle *</option>
+                        <option>Mercedes Vito (1-6 Pax)</option>
+                        <option>Mercedes Sprinter (7-14 Pax)</option>
+                      </select>
+                      <div className="grid grid-cols-2 gap-4">
+                        <input
+                          type="date"
+                          className="bg-[#1a0d09] border border-[#3b1c12] rounded-xl px-3 py-2 text-sm w-full focus:outline-none focus:border-[#c79b6b]"
+                          value={form.date}
+                          onChange={e => setField("date")(e.target.value)}
+                        />
+                        <input
+                          type="time"
+                          className="bg-[#1a0d09] border border-[#3b1c12] rounded-xl px-3 py-2 text-sm w-full focus:outline-none focus:border-[#c79b6b]"
+                          value={form.pickupTime}
+                          onChange={e => setField("pickupTime")(e.target.value)}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <input
+                          placeholder="Pickup Location *"
+                          className="bg-[#1a0d09] border border-[#3b1c12] rounded-xl px-3 py-2 text-sm w-full focus:outline-none focus:border-[#c79b6b]"
+                          value={form.pickupLocation}
+                          onChange={e => setField("pickupLocation")(e.target.value)}
+                        />
+                        <input
+                          placeholder="Drop-off Location *"
+                          className="bg-[#1a0d09] border border-[#3b1c12] rounded-xl px-3 py-2 text-sm w-full focus:outline-none focus:border-[#c79b6b]"
+                          value={form.dropoffLocation}
+                          onChange={e => setField("dropoffLocation")(e.target.value)}
+                        />
+                      </div>
+                      <p className="text-[11px] text-[#d7c7b4]">
+                        Transfer prices are per vehicle, +20% VAT will be added.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* NOTES */}
+                  <textarea
+                    placeholder="Notes / Flight details / Special requests"
+                    rows="3"
+                    className="bg-[#1a0d09] border border-[#3b1c12] rounded-xl px-3 py-2 text-sm w-full focus:outline-none focus:border-[#c79b6b]"
+                    value={form.notes}
+                    onChange={e => setField("notes")(e.target.value)}
+                  />
+
+                  {/* PRICE BOX */}
+                  <div className="mt-2 bg-[#1a0d09] border border-[#3b1c12] rounded-2xl px-4 py-3 text-sm">
+                    <div className="flex justify-between text-[#d7c7b4]">
+                      <span>Net:</span>
+                      <span>€{pricing.net.toFixed(2)}</span>
+                    </div>
+                    {tourCategory === "transfer" && (
+                      <div className="flex justify-between text-[#d7c7b4]">
+                        <span>VAT (20%):</span>
+                        <span>€{pricing.vat.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between pt-2 mt-2 border-t border-[#3b1c12] text-[#f5e9dd] font-semibold">
+                      <span>Total:</span>
+                      <span>€{pricing.total.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 2: SUMMARY */}
+              {step === 2 && (
+                <div className="space-y-5">
+                  <h2 className="text-sm tracking-[0.2em] uppercase text-[#c79b6b]">Review & Confirm</h2>
+                  <div className="bg-[#1a0d09] border border-[#3b1c12] rounded-2xl px-4 py-4 text-sm space-y-2">
+                    <div className="flex justify-between"><span>Name</span><span>{form.firstName} {form.lastName}</span></div>
+                    <div className="flex justify-between"><span>Email</span><span>{form.email}</span></div>
+                    <div className="flex justify-between"><span>Phone</span><span>{form.phone}</span></div>
+                    <div className="flex justify-between"><span>Service</span><span>{currentServiceName}</span></div>
+                    <div className="flex justify-between"><span>Date</span><span>{form.date}</span></div>
+                    {tourCategory !== "transfer" && (
+                      <div className="flex justify-between"><span>Pax</span><span>{form.pax}</span></div>
+                    )}
+                    {tourCategory === "transfer" && (
+                      <>
+                        <div className="flex justify-between"><span>Vehicle</span><span>{form.vehicle}</span></div>
+                        <div className="flex justify-between"><span>Pickup</span><span>{form.pickupLocation}</span></div>
+                        <div className="flex justify-between"><span>Drop-off</span><span>{form.dropoffLocation}</span></div>
+                      </>
+                    )}
+                    <div className="flex justify-between pt-2 mt-2 border-t border-[#3b1c12] text-[#f5e9dd] font-semibold">
+                      <span>Total</span>
+                      <span>€{pricing.total.toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  <label className="flex items-start gap-3 text-[11px] text-[#d7c7b4] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={form.kvkk}
+                      onChange={e => setField("kvkk")(e.target.checked)}
+                    />
+                    <span>
+                      I confirm that all information is correct and I agree to Aretra Travel’s
+                      Terms & Conditions and Privacy Policy.
+                    </span>
+                  </label>
+                </div>
+              )}
+
+              {/* NAV BUTTONS */}
+              <div className="flex justify-between mt-8">
+                {step > 0 ? (
+                  <button
+                    onClick={() => setStep(step - 1)}
+                    className="text-xs tracking-[0.18em] uppercase text-[#a38460]"
+                  >
+                    ← Back
+                  </button>
+                ) : <span></span>}
+                <button
+                  onClick={() => {
+                    if (step === 2) {
+                      handleWhatsAppSend();
+                    } else {
+                      setStep(step + 1);
+                    }
+                  }}
+                  disabled={
+                    (step === 0 && !isStep0Valid) ||
+                    (step === 1 && !isStep1Valid) ||
+                    (step === 2 && !form.kvkk)
+                  }
+                  className={
+                    "px-8 py-3 rounded-full text-xs tracking-[0.2em] uppercase font-semibold " +
+                    (((step === 0 && !isStep0Valid) ||
+                      (step === 1 && !isStep1Valid) ||
+                      (step === 2 && !form.kvkk))
+                      ? "bg-[#3b1c12] text-[#7b5a3c] cursor-not-allowed"
+                      : "bg-[#c79b6b] text-[#120806]")
+                  }
+                >
+                  {step === 2 ? "Send via WhatsApp" : "Next"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.render(<App />, document.getElementById("root"));
+  </script>
+</body>
+</html>
